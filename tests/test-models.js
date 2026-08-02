@@ -414,6 +414,75 @@ test('reset returns the engine to its initial state', function () {
   close(x.e.bandit.estimate(A.SUGGESTIONS[2].id), 0.5, 1e-9, 'bandit not cleared');
 });
 
+console.log('\nVirtual clock');
+
+test('an accelerated replay does not saturate the interaction-rate feature', function () {
+  var t = new A.Telemetry(A.PANELS.map(function (p) { return p.id; }));
+  var off = 0;
+  t.setClock(function () { return Date.now() + off; });
+  // 18 visits at ~9 s apart — a slow, deliberate session.
+  for (var s = 0; s < 18; s++) {
+    off += 9000;
+    t.enterPanel(A.PANELS[s % 3].id);
+    for (var k = 0; k < 3; k++) { off += 1800; t.action('a'); }
+  }
+  var rate = t.featureVector()[0];
+  assert(rate < 0.85,
+    'rate feature saturated on a realistically paced trace: ' + rate.toFixed(2));
+  assert(rate > 0.05, 'rate feature collapsed to zero: ' + rate.toFixed(2));
+});
+
+test('a fast session still reads as faster than a slow one', function () {
+  function trace(stepMs) {
+    var t = new A.Telemetry(A.PANELS.map(function (p) { return p.id; }));
+    var off = 0;
+    t.setClock(function () { return Date.now() + off; });
+    for (var s = 0; s < 20; s++) {
+      off += stepMs;
+      t.enterPanel(A.PANELS[s % 3].id);
+      off += stepMs / 2;
+      t.action('a');
+    }
+    return t.featureVector()[0];
+  }
+  var fast = trace(1200), slow = trace(9000);
+  assert(fast > slow, 'rate feature failed to order fast vs slow: ' + fast + ' vs ' + slow);
+});
+
+test('the simulator clock never runs backwards', function () {
+  var t = new A.Telemetry(A.PANELS.map(function (p) { return p.id; }));
+  var e = new A.AdaptationEngine({
+    panels: A.PANELS, suggestions: A.SUGGESTIONS, telemetry: t
+  });
+  var sim = new A.Simulator({ telemetry: t, engine: e, ui: null,
+    onStep: function (id) { t.enterPanel(id); } });
+
+  // Emulate a completed replay by advancing the offset the way run() does.
+  sim.offset = 120000;
+  t.setClock(function () { return Date.now() + sim.offset; });
+  t.enterPanel('inbox');
+  var duringReplay = t.now();
+
+  sim.stop();                     // must not rewind
+  var afterReplay = t.now();
+  assert(afterReplay >= duringReplay,
+    'clock went backwards after the replay: ' + afterReplay + ' < ' + duringReplay);
+
+  // Every recorded event must still be in the past relative to "now".
+  var future = t.events.filter(function (ev) { return ev.t > t.now() + 50; });
+  assert(future.length === 0,
+    future.length + ' event(s) are timestamped in the future after the replay');
+});
+
+test('reset preserves the installed clock', function () {
+  var t = new A.Telemetry(['a']);
+  t.setClock(function () { return Date.now() + 500000; });
+  var before = t.now();
+  t.reset();
+  assert(t.now() >= before, 'reset rewound the clock');
+  assert(t.sessionStart >= before, 'sessionStart was set from the wrong clock');
+});
+
 console.log('\nSimulator');
 
 test('each profile produces the behaviour signature it claims', function () {
