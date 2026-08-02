@@ -41,10 +41,10 @@ the right; every adaptation writes a plain-language justification there.
 node tests/test-models.js
 ```
 
-32 assertions covering the statistical behaviour of each model (bandit convergence,
+36 assertions covering the statistical behaviour of each model (bandit convergence,
 cluster separation, recovery of a planted conditional dependency, Fitts's Law
-monotonicity, hysteresis, cold-start suppression, export/import round-tripping).
-No test framework required.
+monotonicity, hysteresis, cold-start suppression, virtual-clock monotonicity,
+export/import round-tripping). No test framework required.
 
 ---
 
@@ -124,14 +124,15 @@ are used — closing the tab discards the user model entirely.
 
 This project was developed with assistance from **Anthropic Claude (Opus 5)**, used as
 a pair-programming and drafting assistant. Its contributions and my own are itemised
-in Table 1 of the accompanying report (`AI-Based Adaptive HCI Report.docx`). In
-summary: Claude produced initial implementations of the four model modules, the
+in the Disclosure section of the accompanying report
+(`AI-Based Adaptive HCI Report.docx`). In summary: Claude produced initial implementations of the four model modules, the
 telemetry layer, the stylesheet, and the test suite from my specifications; I set the
 architecture and the design commitments above, and I diagnosed and directed the fixes
-for four defects the AI-generated code contained — a Laplace-smoothing error that
+for the defects the AI-generated code contained — a Laplace-smoothing error that
 flattened the Naive Bayes posterior to uniform, an expertise estimator that learned on
 wall-clock ticks instead of evidence, a cost model that shrank text for struggling
-users, and a switch control that was unreachable by assistive technology. Those
+users, a switch control unreachable by assistive technology, and an interaction-rate
+feature whose ceiling was set so low that it saturated and collapsed the personas. Those
 defects and their diagnoses are documented in the report's Challenges section.
 
 No AI-generated code was accepted without being read, tested, and in several cases
@@ -141,7 +142,7 @@ corrected.
 
 ## References
 
-Alvarez-Cortes, V., Zayas-Pérez, B. E., Zárate-Silva, V. H., & Uresti, J. A. R. (2009).
+Alvarez-Cortes, V., Zárate-Silva, V. H., Ramírez Uresti, J. A., & Zayas-Pérez, B. E. (2009).
 Current challenges and applications for adaptive user interfaces. In I. Maurtua (Ed.),
 *Human-computer interaction* (pp. 49–68). InTech.
 
@@ -149,7 +150,7 @@ Fitts, P. M. (1954). The information capacity of the human motor system in contr
 the amplitude of movement. *Journal of Experimental Psychology, 47*(6), 381–391.
 
 Gajos, K. Z., Weld, D. S., & Wobbrock, J. O. (2010). Automatically generating
-personalized user interfaces with SUPPLE. *Artificial Intelligence, 174*(12–13),
+personalized user interfaces with Supple. *Artificial Intelligence, 174*(12–13),
 910–950.
 
 Jameson, A. (2008). Adaptive interfaces and agents. In A. Sears & J. A. Jacko (Eds.),
