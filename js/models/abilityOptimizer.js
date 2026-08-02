@@ -1,7 +1,7 @@
 /* =========================================================================
  * abilityOptimizer.js — decision-theoretic ability-based presentation tuning
  * -------------------------------------------------------------------------
- * Inspired by the SUPPLE system (Gajos, Weld & Wobbrock, 2010), which framed
+ * Inspired by the Supple system (Gajos, Weld & Wobbrock, 2010), which framed
  * interface generation as an optimisation problem over a cost function
  * estimating the expected effort a *specific* user will spend on an
  * interface. This module implements a small, tractable version of the same
