@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AdaptiveDesk — AI-Based Adaptive Human-Computer Interaction</title>
+<meta name="description" content="A browser-based adaptive user interface driven by client-side machine learning: Thompson Sampling, online k-means, Naive Bayes, and Fitts's-Law-based ability optimisation." />
+<meta name="author" content="Surya Yellutla" />
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body data-theme="day" data-spacing="comfortable" data-expertise="novice">
+
+<a class="skip-link" href="#workspace">Skip to workspace</a>
+
+<header class="app-bar" role="banner">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">◈</span>
+    <div>
+      <h1>AdaptiveDesk</h1>
+      <p class="tagline">An adaptive user interface that learns from how you work</p>
+    </div>
+  </div>
+
+  <div class="app-bar-controls">
+    <span class="persona-chip" id="personaChip" title="Current behavioural persona inferred by the clustering model">
+      <span class="dot" aria-hidden="true"></span>
+      <span id="personaChipLabel">Calibrating…</span>
+    </span>
+
+    <label class="switch" title="Pause or resume all interface adaptation">
+      <input type="checkbox" id="adaptToggle" checked />
+      <span class="switch-track" aria-hidden="true"></span>
+      <span class="switch-label">Adaptation</span>
+    </label>
+
+    <button class="btn btn-ghost" id="btnSimulate" type="button"
+            title="Replay a scripted interaction trace so the models have data to learn from">
+      Simulate user
+    </button>
+    <button class="btn btn-ghost" id="btnReset" type="button"
+            title="Clear all learned models and telemetry">
+      Reset learning
+    </button>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- ============================ ADAPTIVE SIDEBAR ==================== -->
+  <nav class="sidebar" id="sidebar" aria-label="Workspace navigation">
+    <p class="sidebar-heading">
+      Workspace
+      <span class="hint" id="navHint" title="The sidebar re-ranks itself using a Naive Bayes prediction of your next destination">re-ranking</span>
+    </p>
+    <ul class="nav-list" id="navList" role="list"><!-- injected by ui.js --></ul>
+
+    <div class="advanced-zone" id="advancedZone" hidden>
+      <p class="sidebar-heading">Advanced</p>
+      <ul class="nav-list" id="advancedList" role="list"><!-- progressive disclosure --></ul>
+    </div>
+
+    <div class="shortcut-hints" id="shortcutHints" hidden>
+      <p class="sidebar-heading">Keyboard</p>
+      <ul class="kbd-list">
+        <li><kbd>1</kbd>–<kbd>7</kbd> jump to panel</li>
+        <li><kbd>S</kbd> take the suggestion</li>
+        <li><kbd>Z</kbd> undo last action</li>
+        <li><kbd>?</kbd> toggle explanation panel</li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- ============================ WORKSPACE =========================== -->
+  <main class="workspace" id="workspace" tabindex="-1">
+
+    <!-- Adaptive suggestion slot, populated by the multi-armed bandit -->
+    <section class="suggestion-slot" id="suggestionSlot" aria-live="polite" hidden>
+      <div class="suggestion-body">
+        <span class="suggestion-kicker">Suggested for you</span>
+        <h2 id="suggestionLabel"></h2>
+        <p id="suggestionDesc"></p>
+      </div>
+      <div class="suggestion-actions">
+        <button class="btn btn-primary" id="btnTakeSuggestion" type="button">Open</button>
+        <button class="btn btn-ghost" id="btnDismissSuggestion" type="button">Not now</button>
+      </div>
+    </section>
+
+    <div class="panel-host" id="panelHost"><!-- injected by ui.js --></div>
+  </main>
+
+  <!-- ============================ XAI INSPECTOR ======================= -->
+  <aside class="inspector" id="inspector" aria-label="Adaptation explanation">
+    <div class="inspector-head">
+      <h2>Why did this change?</h2>
+      <button class="btn btn-ghost btn-icon" id="btnCollapseInspector" type="button"
+              aria-expanded="true" aria-controls="inspectorBody" title="Collapse">–</button>
+    </div>
+
+    <div id="inspectorBody">
+      <p class="inspector-note">
+        Every adaptation below was produced by a model running in this page. Nothing is
+        sent anywhere. Turn adaptation off in the header at any time.
+      </p>
+
+      <section class="insp-section">
+        <h3>Latest decisions</h3>
+        <ol class="reason-list" id="reasonList">
+          <li class="reason placeholder">Interact with the workspace — or press <em>Simulate user</em> — and the models will start explaining themselves here.</li>
+        </ol>
+      </section>
+
+      <section class="insp-section">
+        <h3>User model</h3>
+        <dl class="model-grid">
+          <dt>Persona</dt><dd id="mPersona">—</dd>
+          <dt>Expertise</dt><dd id="mExpertise">—</dd>
+          <dt>Presentation</dt><dd id="mPresentation">—</dd>
+          <dt>Predicted next</dt><dd id="mNext">—</dd>
+        </dl>
+      </section>
+
+      <section class="insp-section">
+        <h3>Feature vector <span class="hint">live, 90s window</span></h3>
+        <div class="bars" id="featureBars"></div>
+      </section>
+
+      <section class="insp-section">
+        <h3>Bandit posteriors <span class="hint">Beta means</span></h3>
+        <div class="bars" id="banditBars"></div>
+      </section>
+
+      <section class="insp-section">
+        <h3>Telemetry</h3>
+        <pre class="telemetry" id="telemetryDump">—</pre>
+      </section>
+    </div>
+  </aside>
+</div>
+
+<footer class="app-foot">
+  <p>
+    AdaptiveDesk · HCI course project by Surya Yellutla ·
+    Models: Thompson Sampling · online k-means · multinomial Naive Bayes · Fitts's-Law cost optimisation ·
+    All inference is local to this browser.
+  </p>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<!-- Load order matters: models, then sensing, then policy, then rendering. -->
+<script src="js/models/bandit.js"></script>
+<script src="js/models/kmeans.js"></script>
+<script src="js/models/naivebayes.js"></script>
+<script src="js/models/abilityOptimizer.js"></script>
+<script src="js/telemetry.js"></script>
+<script src="js/adaptationEngine.js"></script>
+<script src="js/content.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/simulator.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
