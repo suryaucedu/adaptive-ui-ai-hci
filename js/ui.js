@@ -247,7 +247,15 @@
       var ph = list.querySelector('.placeholder');
       if (ph) ph.remove();
       plan.reasons.forEach(function (r) {
+        // Suppress an explanation identical to the one already at the top.
+        // The bandit can re-select the same arm on consecutive ticks, and
+        // repeating the same sentence three times makes the panel look like
+        // noise rather than reasoning.
+        var head = list.firstChild;
+        if (head && head.dataset && head.dataset.text === r.text) return;
+
         var li = document.createElement('li');
+        li.dataset.text = r.text;
         li.className = 'reason';
         li.dataset.kind = r.kind;
         var k = document.createElement('span');

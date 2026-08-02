@@ -24,7 +24,14 @@
   function Telemetry(panelIds) {
     this.panelIds = panelIds.slice();
     this.events = [];
-    this.sessionStart = Date.now();
+    // All timestamps go through this.now() rather than Date.now() directly.
+    // The simulator installs a fast-forwarding clock so that a replayed
+    // trace carries realistic *inter-event timing* even though it executes
+    // in a few seconds of wall time. Without this, every accelerated replay
+    // saturates the interaction-rate feature at 1.0 and the persona
+    // clusters collapse — the demo would misrepresent the models.
+    this._clock = null;
+    this.sessionStart = this.now();
     this.panelEnteredAt = null;
     this.currentPanel = null;
     this.dwellByPanel = {};
@@ -38,13 +45,21 @@
     this.listeners = [];
   }
 
+  /** Current time on the telemetry clock (real, or virtual under replay). */
+  Telemetry.prototype.now = function () {
+    return this._clock ? this._clock() : Date.now();
+  };
+
+  /** Install/remove a virtual clock. Pass null to return to real time. */
+  Telemetry.prototype.setClock = function (fn) { this._clock = fn; };
+
   Telemetry.prototype.on = function (fn) { this.listeners.push(fn); };
   Telemetry.prototype.emit = function (evt) {
     this.listeners.forEach(function (fn) { fn(evt); });
   };
 
   Telemetry.prototype.record = function (type, payload) {
-    var evt = { type: type, t: Date.now(), payload: payload || {} };
+    var evt = { type: type, t: this.now(), payload: payload || {} };
     this.events.push(evt);
     if (this.events.length > MAX_EVENTS) this.events.shift();
     this.emit(evt);
@@ -54,7 +69,7 @@
   /* ---------------------------------------------------------------- panels */
 
   Telemetry.prototype.enterPanel = function (panelId) {
-    var now = Date.now();
+    var now = this.now();
     if (this.currentPanel && this.panelEnteredAt) {
       var dwell = (now - this.panelEnteredAt) / 1000;
       this.dwellByPanel[this.currentPanel] =
@@ -128,18 +143,27 @@
    * @returns {number[]}
    */
   Telemetry.prototype.featureVector = function () {
-    var now = Date.now();
+    var now = this.now();
     var windowStart = now - WINDOW_MS;
     var recent = this.events.filter(function (e) { return e.t >= windowStart; });
 
     var elapsedMin = Math.max(0.25, (now - Math.max(this.sessionStart, windowStart)) / 60000);
 
-    // [0] interaction rate — clicks/min normalised against 40 cpm as "fast"
+    // [0] interaction rate — actions per minute, normalised so that 1.0
+    // represents a sustained rate at roughly the ceiling of human input
+    // speed. An earlier version normalised against 40 actions/min, but that
+    // is only one action every 1.5 s — a brisk but entirely ordinary pace.
+    // The feature saturated at 1.0 for most active users and stopped
+    // discriminating between them, which in turn collapsed the persona
+    // clusters (an engaged but error-prone user was being read as a fast
+    // explorer). 100 actions/min keeps the feature informative across the
+    // range of behaviour the interface actually sees.
+    var RATE_CEILING_PER_MIN = 100;
     var clicks = recent.filter(function (e) {
       return e.type === 'action' || e.type === 'panel_enter' ||
              e.type === 'shortcut' || e.type === 'suggestion_clicked';
     }).length;
-    var interactionRate = clamp01((clicks / elapsedMin) / 40);
+    var interactionRate = clamp01((clicks / elapsedMin) / RATE_CEILING_PER_MIN);
 
     // [1] navigation breadth — distinct panels visited / total panels
     var seen = {};
@@ -213,7 +237,7 @@
   };
 
   Telemetry.prototype.sessionPhase = function () {
-    var mins = (Date.now() - this.sessionStart) / 60000;
+    var mins = (this.now() - this.sessionStart) / 60000;
     if (mins < 2) return 'start';
     if (mins < 10) return 'mid';
     return 'late';
@@ -247,14 +271,17 @@
       hits: this.hits,
       misses: this.misses,
       shortcuts: this.shortcutUses,
-      sessionSeconds: Math.round((Date.now() - this.sessionStart) / 1000),
+      sessionSeconds: Math.round((this.now() - this.sessionStart) / 1000),
       dwellByPanel: this.dwellByPanel
     };
   };
 
   Telemetry.prototype.reset = function () {
     this.events = [];
-    this.sessionStart = Date.now();
+    // Keep whatever clock is installed — resetting the models must not also
+    // rewind time, or events recorded afterwards would be inconsistent with
+    // any virtual offset the simulator has already accumulated.
+    this.sessionStart = this.now();
     this.dwellByPanel = {};
     this.pointerDistances = [];
     this.misses = 0; this.hits = 0; this.shortcutUses = 0;

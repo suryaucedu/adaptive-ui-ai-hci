@@ -35,7 +35,8 @@
       missProb: 0.04,
       undoProb: 0.03,
       actionsPerPanel: [2, 4],
-      stepMs: 190
+      stepMs: 190,          // wall-clock pacing of the replay
+      virtualStepMs: 5200   // how much simulated time each visit represents
     },
     explorer: {
       label: 'Broad Explorer',
@@ -44,7 +45,8 @@
       missProb: 0.08,
       undoProb: 0.06,
       actionsPerPanel: [1, 2],
-      stepMs: 120
+      stepMs: 120,
+      virtualStepMs: 2400   // explorers move on quickly — short dwell
     },
     struggling: {
       label: 'Effortful Novice',
@@ -53,7 +55,8 @@
       missProb: 0.34,
       undoProb: 0.30,
       actionsPerPanel: [2, 5],
-      stepMs: 240
+      stepMs: 240,
+      virtualStepMs: 9000   // slow, effortful, lots of re-reading
     }
   };
 
@@ -68,6 +71,11 @@
     this.onDone = deps.onDone || function () {};
     this.running = false;
     this.timer = null;
+    // Accumulated virtual time. This persists after a replay finishes: the
+    // simulated session genuinely "aged", and rewinding the clock back to
+    // real time would place every recorded event in the future, corrupting
+    // the sliding analysis window. Time must only ever move forward.
+    this.offset = 0;
   }
 
   Simulator.prototype.stop = function () {
@@ -93,13 +101,25 @@
     this.running = true;
     var idx = 0;
 
+    // Install a fast-forwarding clock. The replay executes in a few seconds
+    // of wall time, but telemetry sees each panel visit separated by
+    // profile.virtualStepMs — so dwell, interaction rate and session phase
+    // are all computed from plausible timings instead of from an
+    // instantaneous burst.
+    var stepJitter = 0;
+    this.t.setClock(function () { return Date.now() + self.offset + stepJitter; });
+
     function step() {
       if (!self.running || idx >= plan.length) {
         self.running = false;
+        self.offset += stepJitter;   // keep the clock monotonic
+        stepJitter = 0;
         self.onDone(profile);
         return;
       }
       var panelId = plan[idx++];
+      self.offset += (profile.virtualStepMs || 3000) * (0.7 + Math.random() * 0.6);
+      stepJitter = 0;
 
       // Pointer travel toward a plausible sidebar/target coordinate, with a
       // profile-dependent probability of missing the control entirely.
@@ -116,6 +136,8 @@
       for (var k = 0; k < n; k++) {
         var panel = A.PANELS.filter(function (p) { return p.id === panelId; })[0];
         if (!panel) continue;
+        // Spread the actions within this visit across the virtual dwell.
+        stepJitter += ((profile.virtualStepMs || 3000) / (n + 1)) * 0.8;
         var act = pick(panel.actions).id;
         if (chance(profile.shortcutProb)) {
           self.t.shortcut('ctrl+' + (k + 1), act);

@@ -110,6 +110,11 @@
     return s ? s.label : id;
   };
 
+  /** "a" / "an" for the persona names used in generated explanations. */
+  function article(word) {
+    return /^[aeiou]/i.test(word || '') ? 'an' : 'a';
+  }
+
   AdaptationEngine.prototype.panelLabel = function (id) {
     var p = this.panels.filter(function (x) { return x.id === id; })[0];
     return p ? p.label : id;
@@ -247,8 +252,8 @@
           text: 'Promoted "' + this.panelLabel(top.label) + '" to the top of the sidebar — ' +
                 (top.prob * 100).toFixed(0) + '% predicted probability of being your next ' +
                 'destination given it is ' + context.timeBucket + ', you were last in "' +
-                this.panelLabel(context.lastAction) + '", and you are behaving like a ' +
-                persona.label + '.'
+                this.panelLabel(context.lastAction) + '", and you are behaving like ' +
+                article(persona.label) + ' ' + persona.label + '.'
         });
         this.explain('navigation', 'Sidebar re-ranked; "' + this.panelLabel(top.label) + '" first.');
       }
